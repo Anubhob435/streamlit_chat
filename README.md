@@ -1,4 +1,3 @@
-```markdown
 # Jarvis - AI Chat Assistant
 
 A sophisticated AI chat interface powered by Google's Gemini 1.5 Pro model, built with Streamlit.
@@ -74,9 +73,9 @@ Each chat message contains:
 - `ip_address`: Anonymized IP (default: 'streamlit_session')
 - `model`: The model used (default: 'gemini-1.5-pro')
 
-## Deployment
+## Contributing
 
-This application can be deployed to Google Cloud Platform using the app.yaml configuration.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Requirements
 
@@ -87,12 +86,32 @@ This application can be deployed to Google Cloud Platform using the app.yaml con
 
 ## License
 
-[Specify your license]
+MIT License
+
+Copyright (c) 2024 Anubhob Dey
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ## Author
 
-[Your Name]
-```
+Created with ❤️ by Anubhob Dey
 
-You can customize this README by adding your name, choosing a license, and adding any additional sections specific to your project.
-You can customize this README by adding your name, choosing a license, and adding any additional sections specific to your project.
+### Connect with me:
+- GitHub: [@yourgithubhandle](https://github.com/yourgithubhandle)
+- LinkedIn: [Anubhob Dey](https://linkedin.com/in/yourprofile)
