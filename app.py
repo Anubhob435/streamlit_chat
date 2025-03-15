@@ -86,7 +86,6 @@ if "session_id" not in st.session_state:
 
 if "settings" not in st.session_state:
     st.session_state.settings = {
-        "temperature": 0.9,
         "response_length": "Standard",
         "chat_context": "Basic Assistant"
     }
@@ -113,7 +112,7 @@ def get_gemini_chat(_context, _temp=0.9):
     chat.send_message(_context)
     return chat
 
-chat = get_gemini_chat(INITIAL_CONTEXT, st.session_state.settings["temperature"])
+chat = get_gemini_chat(INITIAL_CONTEXT, 0.9)
 
 # Function to process messages and update chat history
 def process_message(user_message):
@@ -162,15 +161,7 @@ with col2:
         index=list(CONTEXT_OPTIONS.keys()).index(st.session_state.settings["chat_context"]),
     )
     
-    # Temperature slider
-    selected_temp = st.sidebar.slider(
-        "Creativity Level", 
-        min_value=0.1, 
-        max_value=1.0, 
-        value=st.session_state.settings["temperature"],
-        step=0.1,
-        help="Higher values make output more creative, lower values make it more deterministic"
-    )
+    # Temperature slider removed
     
     # Change radio buttons to dropdown for response style
     selected_length = st.sidebar.selectbox(
@@ -184,7 +175,6 @@ with col2:
     if st.sidebar.button("Apply Settings"):
         # Update settings
         st.session_state.settings["chat_context"] = selected_context
-        st.session_state.settings["temperature"] = selected_temp
         st.session_state.settings["response_length"] = selected_length
         
         # Re-initialize chat with new settings
@@ -194,8 +184,8 @@ with col2:
         elif selected_length == "Detailed":
             new_context += " Provide detailed, comprehensive responses."
             
-        # Reinitialize the chat with new context
-        chat = get_gemini_chat(new_context, selected_temp)
+        # Reinitialize the chat with new context (using default temperature)
+        chat = get_gemini_chat(new_context, 0.9)
         
         st.sidebar.success("Settings applied!")
         st.rerun()
