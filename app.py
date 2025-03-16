@@ -7,6 +7,11 @@ from datetime import datetime
 from uuid import uuid4
 import yaml
 from mongo_utils import get_db_connection, store_chat_message, get_chat_history_by_session
+# Import the image generation functionality
+from imagen import generate
+import base64
+from PIL import Image
+import io
 
 # Load from .env as fallback for local development
 load_dotenv()
@@ -90,6 +95,10 @@ if "settings" not in st.session_state:
         "chat_context": "Basic Assistant"
     }
 
+# Initialize session state for image generation
+if "generated_images" not in st.session_state:
+    st.session_state.generated_images = []
+
 # Different context options for the chatbot
 CONTEXT_OPTIONS = {
     "Basic Assistant": "You are a helpful, friendly AI assistant. Be concise and clear in your responses.",
@@ -117,6 +126,42 @@ chat = get_gemini_chat(INITIAL_CONTEXT, 0.9)
 # Function to process messages and update chat history
 def process_message(user_message):
     try:
+        # Check if this is an image generation request
+        if user_message.lower().startswith("generate image:") or user_message.lower().startswith("create image:"):
+            # Extract the image prompt
+            image_prompt = user_message.split(":", 1)[1].strip()
+            
+            # Display user message in chat
+            st.session_state.chat_history.append({"role": "user", "content": user_message})
+            
+            # Generate the image
+            with st.spinner("Generating image..."):
+                image_path = process_image_generation_from_chat(image_prompt)
+            
+            if image_path:
+                # Create response with image
+                bot_response = f"I've generated an image based on your prompt: '{image_prompt}'. You can view it in the Generated Images tab."
+                
+                # Store in session state
+                st.session_state.chat_history.append({"role": "assistant", "content": bot_response})
+                
+                # Store conversation in MongoDB
+                store_chat_message(
+                    st.session_state.session_id, 
+                    user_message, 
+                    bot_response, 
+                    platform='streamlit',
+                    ip_address="streamlit_session",
+                    model='gemini-1.5-pro'
+                )
+                
+                return bot_response
+            else:
+                bot_response = "I encountered an error while trying to generate that image. Please try again with a different description."
+                st.session_state.chat_history.append({"role": "assistant", "content": bot_response})
+                return bot_response
+        
+        # Handle regular chat messages
         # Display user message in chat
         st.session_state.chat_history.append({"role": "user", "content": user_message})
         
@@ -151,50 +196,85 @@ col1, col2 = st.columns([5, 1])  # Adjust ratio to give more space to chat
 with col2:
     st.sidebar.title("Gemini Chat 🤖")
     
-    # Chat settings in sidebar
-    st.sidebar.title("Chat Settings")
+    # Add tabs for Chat and Image Generation
+    tab1, tab2 = st.sidebar.tabs(["Chat Settings", "Image Generation"])
     
-    # Chat persona selector
-    selected_context = st.sidebar.selectbox(
-        "Chat Persona",
-        options=list(CONTEXT_OPTIONS.keys()),
-        index=list(CONTEXT_OPTIONS.keys()).index(st.session_state.settings["chat_context"]),
-    )
-    
-    # Temperature slider removed
-    
-    # Change radio buttons to dropdown for response style
-    selected_length = st.sidebar.selectbox(
-        "Response Style",
-        options=["Concise", "Standard", "Detailed"],
-        index=["Concise", "Standard", "Detailed"].index(st.session_state.settings["response_length"]),
-        help="Controls how detailed the AI responses should be"
-    )
-    
-    # Apply settings button
-    if st.sidebar.button("Apply Settings"):
-        # Update settings
-        st.session_state.settings["chat_context"] = selected_context
-        st.session_state.settings["response_length"] = selected_length
+    with tab1:
+        # Chat settings in sidebar
+        st.sidebar.title("Chat Settings")
         
-        # Re-initialize chat with new settings
-        new_context = CONTEXT_OPTIONS[selected_context]
-        if selected_length == "Concise":
-            new_context += " Keep your responses very brief and to the point."
-        elif selected_length == "Detailed":
-            new_context += " Provide detailed, comprehensive responses."
+        # Chat persona selector
+        selected_context = st.sidebar.selectbox(
+            "Chat Persona",
+            options=list(CONTEXT_OPTIONS.keys()),
+            index=list(CONTEXT_OPTIONS.keys()).index(st.session_state.settings["chat_context"]),
+        )
+        
+        # Temperature slider removed
+        
+        # Change radio buttons to dropdown for response style
+        selected_length = st.sidebar.selectbox(
+            "Response Style",
+            options=["Concise", "Standard", "Detailed"],
+            index=["Concise", "Standard", "Detailed"].index(st.session_state.settings["response_length"]),
+            help="Controls how detailed the AI responses should be"
+        )
+        
+        # Apply settings button
+        if st.sidebar.button("Apply Settings"):
+            # Update settings
+            st.session_state.settings["chat_context"] = selected_context
+            st.session_state.settings["response_length"] = selected_length
             
-        # Reinitialize the chat with new context (using default temperature)
-        chat = get_gemini_chat(new_context, 0.9)
+            # Re-initialize chat with new settings
+            new_context = CONTEXT_OPTIONS[selected_context]
+            if selected_length == "Concise":
+                new_context += " Keep your responses very brief and to the point."
+            elif selected_length == "Detailed":
+                new_context += " Provide detailed, comprehensive responses."
+                
+            # Reinitialize the chat with new context (using default temperature)
+            chat = get_gemini_chat(new_context, 0.9)
+            
+            st.sidebar.success("Settings applied!")
+            st.rerun()
         
-        st.sidebar.success("Settings applied!")
-        st.rerun()
+        # Clear chat button with confirmation
+        if st.sidebar.button("Clear Chat History", type="secondary"):
+            st.session_state.chat_history = []
+            st.sidebar.success("Chat history cleared!")
+            st.rerun()
     
-    # Clear chat button with confirmation
-    if st.sidebar.button("Clear Chat History", type="secondary"):
-        st.session_state.chat_history = []
-        st.sidebar.success("Chat history cleared!")
-        st.rerun()
+    with tab2:
+        st.header("Generate Images")
+        image_prompt = st.text_area("Describe the image you want to generate:", 
+                                   placeholder="An Indian Temple with a beautiful sunset")
+        
+        if st.button("Generate Image"):
+            with st.spinner("Generating image..."):
+                try:
+                    # Generate a unique filename for each image
+                    img_filename = f"generated_image_{len(st.session_state.generated_images)}.png"
+                    img_path = os.path.join("generated_images", img_filename)
+                    
+                    # Ensure the directory exists
+                    os.makedirs("generated_images", exist_ok=True)
+                    
+                    # Generate the image
+                    output_path = generate(prompt_text=image_prompt, output_path=img_path)
+                    
+                    if output_path:
+                        # Add to session state
+                        st.session_state.generated_images.append({
+                            "path": output_path,
+                            "prompt": image_prompt,
+                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                        st.success("Image generated successfully!")
+                    else:
+                        st.error("Failed to generate image.")
+                except Exception as e:
+                    st.error(f"Error generating image: {str(e)}")
     
     # Information section
     st.sidebar.markdown("---")
@@ -211,22 +291,78 @@ with col2:
 
 with col1:
     # Simplify main chat area
-    st.title("💬 Gemini AI Chat")
+    # Add tabs for Chat and Generated Images
+    chat_tab, images_tab = st.tabs(["Chat", "Generated Images"])
     
-    # Welcome message with simple markdown
-    if not st.session_state.chat_history:
-        st.info("Welcome to Gemini AI Chat! Start a conversation by typing a message below.")
+    with chat_tab:
+        st.title("💬 Gemini AI Chat")
+        
+        # Welcome message with simple markdown
+        if not st.session_state.chat_history:
+            st.info("Welcome to Gemini AI Chat! Start a conversation by typing a message below.")
 
-    # Display chat messages with improved styling
-    for i, message in enumerate(st.session_state.chat_history):
-        if message["role"] == "user":
-            with st.chat_message("user", avatar="👤"):
-                st.write(message["content"])
-        else:
-            with st.chat_message("assistant", avatar="🤖"):
-                st.write(message["content"])
+        # Display chat messages with improved styling
+        for i, message in enumerate(st.session_state.chat_history):
+            if message["role"] == "user":
+                with st.chat_message("user", avatar="👤"):
+                    st.write(message["content"])
+            else:
+                with st.chat_message("assistant", avatar="🤖"):
+                    st.write(message["content"])
+        
+        # Chat input using Streamlit's native chat input
+        if prompt := st.chat_input("Ask Gemini something...", key="chat_input"):
+            process_message(prompt)
+            st.rerun()
     
-    # Chat input using Streamlit's native chat input
-    if prompt := st.chat_input("Ask Gemini something...", key="chat_input"):
-        process_message(prompt)
-        st.rerun()
+    with images_tab:
+        st.title("🖼️ Generated Images")
+        
+        if not st.session_state.generated_images:
+            st.info("No images generated yet. Use the Image Generation tab in the sidebar to create images.")
+        else:
+            # Display generated images in a grid
+            cols = st.columns(2)  # Display 2 images per row
+            
+            for i, img_data in enumerate(st.session_state.generated_images):
+                col_idx = i % 2
+                with cols[col_idx]:
+                    try:
+                        st.image(img_data["path"], caption=f"Prompt: {img_data['prompt']}")
+                        st.caption(f"Generated on: {img_data['timestamp']}")
+                        # Add a download button
+                        with open(img_data["path"], "rb") as file:
+                            btn = st.download_button(
+                                label="Download Image",
+                                data=file,
+                                file_name=os.path.basename(img_data["path"]),
+                                mime="image/png"
+                            )
+                    except Exception as e:
+                        st.error(f"Error displaying image {i+1}: {str(e)}")
+
+# Add a function to handle image generation from chat context
+def process_image_generation_from_chat(prompt):
+    try:
+        # Generate a unique filename
+        img_filename = f"generated_image_{len(st.session_state.generated_images)}.png"
+        img_path = os.path.join("generated_images", img_filename)
+        
+        # Ensure the directory exists
+        os.makedirs("generated_images", exist_ok=True)
+        
+        # Generate the image
+        output_path = generate(prompt_text=prompt, output_path=img_path)
+        
+        if output_path:
+            # Add to session state
+            st.session_state.generated_images.append({
+                "path": output_path,
+                "prompt": prompt,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            return output_path
+        return None
+    except Exception as e:
+        print(f"Error generating image from chat: {str(e)}")
+        return None

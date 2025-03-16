@@ -11,8 +11,7 @@ def save_binary_file(file_name, data):
     f.write(data)
     f.close()
 
-
-def generate():
+def generate(prompt_text="An Indian Temple with a beautiful sunset", output_path="generated_image.png"):
     client = genai.Client(
         api_key=os.environ.get("GEMINI_API_KEY"),
     )
@@ -22,7 +21,7 @@ def generate():
         types.Content(
             role="user",
             parts=[
-                types.Part.from_text(text="""IAn Indian Temple with a beautiful sunset"""),
+                types.Part.from_text(text=prompt_text),
             ],
         ),
     ]
@@ -50,35 +49,52 @@ def generate():
             image_data = chunk.candidates[0].content.parts[0].inline_data.data
             mime_type = chunk.candidates[0].content.parts[0].inline_data.mime_type
             
-            # Save original image to temporary file
-            temp_file = "temp_image"
-            save_binary_file(temp_file, image_data)
-            
+            # Decode and save the image
             try:
-                # Open the image using PIL
-                img = Image.open(temp_file)
+                # First, decode the base64 data if it's encoded that way
+                # Some APIs return raw binary data, others return base64-encoded data
+                try:
+                    # Try to decode base64 data
+                    decoded_data = base64.b64decode(image_data)
+                except:
+                    # If not base64, use the original data
+                    decoded_data = image_data
                 
-                # Convert to RGB if necessary (to handle RGBA or other formats)
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
+                # Create a PIL Image from binary data
+                image = Image.open(io.BytesIO(decoded_data))
                 
-                # Save as PNG
-                png_file = "image.png"
-                img.save(png_file, "PNG")
+                # Save the image
+                image.save(output_path)
+                print(f"Image saved to {output_path}")
                 
-                print(f"Image converted and saved as PNG: {png_file}")
-                
-                # Display the image
-                img.show()
-                
-                # Remove temporary file
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                    
+                return output_path
             except Exception as e:
-                print(f"Error processing image: {e}")
+                print(f"Error saving image: {e}")
+                # Let's try an alternative approach by saving the raw data first
+                try:
+                    with open("temp_raw_image", "wb") as f:
+                        f.write(image_data)
+                    print("Saved raw image data for debugging")
+                    
+                    # Try saving with the original save_binary_file function
+                    save_binary_file(output_path, image_data)
+                    print(f"Attempted to save using direct binary write to {output_path}")
+                    return output_path
+                except Exception as e2:
+                    print(f"Second attempt failed: {e2}")
+                return None
         else:
-            print(chunk.text)
+            text_response = chunk.text
+            print(text_response)
+            
+    return None
 
 if __name__ == "__main__":
-    generate()
+    image_path = generate()
+    if image_path:
+        # For local testing, open the image
+        try:
+            img = Image.open(image_path)
+            img.show()
+        except Exception as e:
+            print(f"Error displaying image: {e}")

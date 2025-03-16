@@ -6,7 +6,6 @@ A sophisticated AI chat interface powered by Google's Gemini 1.5 Pro model, buil
 
 - 🤖 Chat with Gemini 1.5 Pro, one of the most advanced AI language models
 - 🎭 Multiple chat personas: Basic Assistant, Technical Expert, Creative Writer, Professional Consultant
-- 🎛️ Adjustable creativity level (temperature) for varied responses
 - 📝 Three response styles: Concise, Standard, and Detailed
 - 🔄 Persistent chat history stored in MongoDB
 - 🌓 Dark mode interface for comfortable viewing
